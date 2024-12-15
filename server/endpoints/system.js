@@ -1,7 +1,7 @@
 process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
-const { viewLocalFiles, normalizePath } = require("../utils/files");
+const { viewLocalFiles, normalizePath, isWithin } = require("../utils/files");
 const { purgeDocument, purgeFolder } = require("../utils/files/purgeDocument");
 const { getVectorDbClass } = require("../utils/helpers");
 const { updateENV, dumpENV } = require("../utils/helpers/updateENV");
@@ -27,6 +27,7 @@ const {
   renameLogoFile,
   removeCustomLogo,
   LOGO_FILENAME,
+  isDefaultFilename,
 } = require("../utils/files/logo");
 const { Telemetry } = require("../models/telemetry");
 const { WelcomeMessages } = require("../models/welcomeMessages");
@@ -39,10 +40,7 @@ const {
   isMultiUserSetup,
 } = require("../utils/middleware/multiUserProtected");
 const { fetchPfp, determinePfpFilepath } = require("../utils/files/pfp");
-const {
-  prepareWorkspaceChatsForExport,
-  exportChatsAsType,
-} = require("../utils/helpers/chat/convertTo");
+const { exportChatsAsType } = require("../utils/helpers/chat/convertTo");
 const { EventLogs } = require("../models/eventLogs");
 const { CollectorApi } = require("../utils/collectorApi");
 const {
@@ -51,6 +49,13 @@ const {
   generateRecoveryCodes,
 } = require("../utils/PasswordRecovery");
 const { SlashCommandPresets } = require("../models/slashCommandsPresets");
+const { EncryptionManager } = require("../utils/EncryptionManager");
+const { BrowserExtensionApiKey } = require("../models/browserExtensionApiKey");
+const {
+  chatHistoryViewable,
+} = require("../utils/middleware/chatHistoryViewable");
+const { simpleSSOEnabled } = require("../utils/middleware/simpleSSOEnabled");
+const { TemporaryAuthToken } = require("../models/temporaryAuthToken");
 
 function systemEndpoints(app) {
   if (!app) return;
@@ -66,7 +71,7 @@ function systemEndpoints(app) {
   app.get("/env-dump", async (_, response) => {
     if (process.env.NODE_ENV !== "production")
       return response.sendStatus(200).end();
-    await dumpENV();
+    dumpENV();
     response.sendStatus(200).end();
   });
 
@@ -75,7 +80,7 @@ function systemEndpoints(app) {
       const results = await SystemSettings.currentSettings();
       response.status(200).json({ results });
     } catch (e) {
-      console.log(e.message, e);
+      console.error(e.message, e);
       response.sendStatus(500).end();
     }
   });
@@ -98,7 +103,7 @@ function systemEndpoints(app) {
 
         response.sendStatus(200).end();
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -110,7 +115,7 @@ function systemEndpoints(app) {
 
       if (await SystemSettings.isMultiUserMode()) {
         const { username, password } = reqBody(request);
-        const existingUser = await User.get({ username: String(username) });
+        const existingUser = await User._get({ username: String(username) });
 
         if (!existingUser) {
           await EventLogs.logEvent(
@@ -188,7 +193,7 @@ function systemEndpoints(app) {
           // Return recovery codes to frontend
           response.status(200).json({
             valid: true,
-            user: existingUser,
+            user: User.filterFields(existingUser),
             token: makeJWT(
               { id: existingUser.id, username: existingUser.username },
               "30d"
@@ -201,7 +206,7 @@ function systemEndpoints(app) {
 
         response.status(200).json({
           valid: true,
-          user: existingUser,
+          user: User.filterFields(existingUser),
           token: makeJWT(
             { id: existingUser.id, username: existingUser.username },
             "30d"
@@ -236,15 +241,61 @@ function systemEndpoints(app) {
         });
         response.status(200).json({
           valid: true,
-          token: makeJWT({ p: password }, "30d"),
+          token: makeJWT(
+            { p: new EncryptionManager().encrypt(password) },
+            "30d"
+          ),
           message: null,
         });
       }
     } catch (e) {
-      console.log(e.message, e);
+      console.error(e.message, e);
       response.sendStatus(500).end();
     }
   });
+
+  app.get(
+    "/request-token/sso/simple",
+    [simpleSSOEnabled],
+    async (request, response) => {
+      const { token: tempAuthToken } = request.query;
+      const { sessionToken, token, error } =
+        await TemporaryAuthToken.validate(tempAuthToken);
+
+      if (error) {
+        await EventLogs.logEvent("failed_login_invalid_temporary_auth_token", {
+          ip: request.ip || "Unknown IP",
+          multiUserMode: true,
+        });
+        return response.status(401).json({
+          valid: false,
+          token: null,
+          message: `[001] An error occurred while validating the token: ${error}`,
+        });
+      }
+
+      await Telemetry.sendTelemetry(
+        "login_event",
+        { multiUserMode: true },
+        token.user.id
+      );
+      await EventLogs.logEvent(
+        "login_event",
+        {
+          ip: request.ip || "Unknown IP",
+          username: token.user.username || "Unknown user",
+        },
+        token.user.id
+      );
+
+      response.status(200).json({
+        valid: true,
+        user: User.filterFields(token.user),
+        token: sessionToken,
+        message: null,
+      });
+    }
+  );
 
   app.post(
     "/system/recover-account",
@@ -307,7 +358,7 @@ function systemEndpoints(app) {
           : await VectorDb.totalVectors();
         response.status(200).json({ vectorCount });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -322,7 +373,7 @@ function systemEndpoints(app) {
         await purgeDocument(name);
         response.sendStatus(200).end();
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -337,7 +388,7 @@ function systemEndpoints(app) {
         for await (const name of names) await purgeDocument(name);
         response.sendStatus(200).end();
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -352,7 +403,7 @@ function systemEndpoints(app) {
         await purgeFolder(name);
         response.sendStatus(200).end();
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -366,7 +417,7 @@ function systemEndpoints(app) {
         const localFiles = await viewLocalFiles();
         response.status(200).json({ localFiles });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -380,7 +431,7 @@ function systemEndpoints(app) {
         const online = await new CollectorApi().online();
         response.sendStatus(online ? 200 : 503);
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -399,7 +450,7 @@ function systemEndpoints(app) {
 
         response.status(200).json({ types });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -416,10 +467,9 @@ function systemEndpoints(app) {
           false,
           response?.locals?.user?.id
         );
-        if (process.env.NODE_ENV === "production") await dumpENV();
         response.status(200).json({ newValues, error });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -436,18 +486,24 @@ function systemEndpoints(app) {
           return;
         }
 
+        let error = null;
         const { usePassword, newPassword } = reqBody(request);
-        const { error } = await updateENV(
-          {
-            AuthToken: usePassword ? newPassword : "",
-            JWTSecret: usePassword ? v4() : "",
-          },
-          true
-        );
-        if (process.env.NODE_ENV === "production") await dumpENV();
+        if (!usePassword) {
+          // Password is being disabled so directly unset everything to bypass validation.
+          process.env.AUTH_TOKEN = "";
+          process.env.JWT_SECRET = "";
+        } else {
+          error = await updateENV(
+            {
+              AuthToken: newPassword,
+              JWTSecret: v4(),
+            },
+            true
+          )?.error;
+        }
         response.status(200).json({ success: !error, error });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -472,12 +528,19 @@ function systemEndpoints(app) {
           password,
           role: ROLES.admin,
         });
+
+        if (error || !user) {
+          response.status(400).json({
+            success: false,
+            error: error || "Failed to enable multi-user mode.",
+          });
+          return;
+        }
+
         await SystemSettings._updateSettings({
           multi_user_mode: true,
-          users_can_delete_workspaces: false,
-          limit_user_messages: false,
-          message_limit: 25,
         });
+        await BrowserExtensionApiKey.migrateApiKeysToMultiUser(user.id);
 
         await updateENV(
           {
@@ -485,7 +548,6 @@ function systemEndpoints(app) {
           },
           true
         );
-        if (process.env.NODE_ENV === "production") await dumpENV();
         await Telemetry.sendTelemetry("enabled_multi_user_mode", {
           multiUserMode: true,
         });
@@ -497,7 +559,7 @@ function systemEndpoints(app) {
           multi_user_mode: false,
         });
 
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -508,27 +570,37 @@ function systemEndpoints(app) {
       const multiUserMode = await SystemSettings.isMultiUserMode();
       response.status(200).json({ multiUserMode });
     } catch (e) {
-      console.log(e.message, e);
+      console.error(e.message, e);
       response.sendStatus(500).end();
     }
   });
 
-  app.get("/system/logo", async function (_, response) {
+  app.get("/system/logo", async function (request, response) {
     try {
-      const defaultFilename = getDefaultFilename();
+      const darkMode =
+        !request?.query?.theme || request?.query?.theme === "default";
+      const defaultFilename = getDefaultFilename(darkMode);
       const logoPath = await determineLogoFilepath(defaultFilename);
       const { found, buffer, size, mime } = fetchLogo(logoPath);
+
       if (!found) {
         response.sendStatus(204).end();
         return;
       }
 
+      const currentLogoFilename = await SystemSettings.currentLogoFilename();
       response.writeHead(200, {
+        "Access-Control-Expose-Headers":
+          "Content-Disposition,X-Is-Custom-Logo,Content-Type,Content-Length",
         "Content-Type": mime || "image/png",
         "Content-Disposition": `attachment; filename=${path.basename(
           logoPath
         )}`,
         "Content-Length": size,
+        "X-Is-Custom-Logo":
+          currentLogoFilename !== null &&
+          currentLogoFilename !== defaultFilename &&
+          !isDefaultFilename(currentLogoFilename),
       });
       response.end(Buffer.from(buffer, "base64"));
       return;
@@ -561,6 +633,22 @@ function systemEndpoints(app) {
       response.status(200).json({ supportEmail: supportEmail });
     } catch (error) {
       console.error("Error fetching support email:", error);
+      response.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // No middleware protection in order to get this on the login page
+  app.get("/system/custom-app-name", async (_, response) => {
+    try {
+      const customAppName =
+        (
+          await SystemSettings.get({
+            label: "custom_app_name",
+          })
+        )?.value ?? null;
+      response.status(200).json({ customAppName: customAppName });
+    } catch (error) {
+      console.error("Error fetching custom app name:", error);
       response.status(500).json({ message: "Internal server error" });
     }
   });
@@ -614,11 +702,13 @@ function systemEndpoints(app) {
         const userRecord = await User.get({ id: user.id });
         const oldPfpFilename = userRecord.pfpFilename;
         if (oldPfpFilename) {
+          const storagePath = path.join(__dirname, "../storage/assets/pfp");
           const oldPfpPath = path.join(
-            __dirname,
-            `../storage/assets/pfp/${normalizePath(userRecord.pfpFilename)}`
+            storagePath,
+            normalizePath(userRecord.pfpFilename)
           );
-
+          if (!isWithin(path.resolve(storagePath), path.resolve(oldPfpPath)))
+            throw new Error("Invalid path name");
           if (fs.existsSync(oldPfpPath)) fs.unlinkSync(oldPfpPath);
         }
 
@@ -647,13 +737,14 @@ function systemEndpoints(app) {
         const userRecord = await User.get({ id: user.id });
         const oldPfpFilename = userRecord.pfpFilename;
 
-        console.log("oldPfpFilename", oldPfpFilename);
         if (oldPfpFilename) {
+          const storagePath = path.join(__dirname, "../storage/assets/pfp");
           const oldPfpPath = path.join(
-            __dirname,
-            `../storage/assets/pfp/${normalizePath(oldPfpFilename)}`
+            storagePath,
+            normalizePath(oldPfpFilename)
           );
-
+          if (!isWithin(path.resolve(storagePath), path.resolve(oldPfpPath)))
+            throw new Error("Invalid path name");
           if (fs.existsSync(oldPfpPath)) fs.unlinkSync(oldPfpPath);
         }
 
@@ -742,33 +833,6 @@ function systemEndpoints(app) {
       } catch (error) {
         console.error("Error processing the logo removal:", error);
         response.status(500).json({ message: "Error removing the logo." });
-      }
-    }
-  );
-
-  app.get(
-    "/system/can-delete-workspaces",
-    [validatedRequest],
-    async function (request, response) {
-      try {
-        if (!response.locals.multiUserMode) {
-          return response.status(200).json({ canDelete: true });
-        }
-
-        const user = await userFromSession(request, response);
-        if ([ROLES.admin, ROLES.manager].includes(user?.role)) {
-          return response.status(200).json({ canDelete: true });
-        }
-
-        const canDelete = await SystemSettings.canDeleteWorkspaces();
-        response.status(200).json({ canDelete });
-      } catch (error) {
-        console.error("Error fetching can delete workspaces:", error);
-        response.status(500).json({
-          success: false,
-          message: "Internal server error",
-          canDelete: false,
-        });
       }
     }
   );
@@ -949,7 +1013,11 @@ function systemEndpoints(app) {
 
   app.post(
     "/system/workspace-chats",
-    [validatedRequest, flexUserRoleValid([ROLES.admin, ROLES.manager])],
+    [
+      chatHistoryViewable,
+      validatedRequest,
+      flexUserRoleValid([ROLES.admin, ROLES.manager]),
+    ],
     async (request, response) => {
       try {
         const { offset = 0, limit = 20 } = reqBody(request);
@@ -976,7 +1044,9 @@ function systemEndpoints(app) {
     async (request, response) => {
       try {
         const { id } = request.params;
-        await WorkspaceChats.delete({ id: Number(id) });
+        Number(id) === -1
+          ? await WorkspaceChats.delete({}, true)
+          : await WorkspaceChats.delete({ id: Number(id) });
         response.json({ success: true, error: null });
       } catch (e) {
         console.error(e);
@@ -987,16 +1057,20 @@ function systemEndpoints(app) {
 
   app.get(
     "/system/export-chats",
-    [validatedRequest, flexUserRoleValid([ROLES.manager, ROLES.admin])],
+    [
+      chatHistoryViewable,
+      validatedRequest,
+      flexUserRoleValid([ROLES.manager, ROLES.admin]),
+    ],
     async (request, response) => {
       try {
-        const { type = "jsonl" } = request.query;
-        const chats = await prepareWorkspaceChatsForExport(type);
-        const { contentType, data } = await exportChatsAsType(chats, type);
+        const { type = "jsonl", chatType = "workspace" } = request.query;
+        const { contentType, data } = await exportChatsAsType(type, chatType);
         await EventLogs.logEvent(
           "exported_chats",
           {
             type,
+            chatType,
           },
           response.locals.user?.id
         );
@@ -1024,7 +1098,7 @@ function systemEndpoints(app) {
 
       const updates = {};
       if (username) {
-        updates.username = String(username);
+        updates.username = User.validations.username(String(username));
       }
       if (password) {
         updates.password = String(password);

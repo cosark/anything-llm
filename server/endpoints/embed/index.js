@@ -29,6 +29,7 @@ function embeddedEndpoints(app) {
           prompt = null,
           model = null,
           temperature = null,
+          username = null,
         } = reqBody(request);
 
         response.setHeader("Cache-Control", "no-cache");
@@ -41,6 +42,7 @@ function embeddedEndpoints(app) {
           prompt,
           model,
           temperature,
+          username,
         });
         await Telemetry.sendTelemetry("embed_sent_chat", {
           multiUserMode: multiUserMode(response),
@@ -54,6 +56,7 @@ function embeddedEndpoints(app) {
         writeResponseChunk(response, {
           id: uuidv4(),
           type: "abort",
+          sources: [],
           textResponse: null,
           close: true,
           error: e.message,
@@ -70,13 +73,17 @@ function embeddedEndpoints(app) {
       try {
         const { sessionId } = request.params;
         const embed = response.locals.embedConfig;
+        const history = await EmbedChats.forEmbedByUser(
+          embed.id,
+          sessionId,
+          null,
+          null,
+          true
+        );
 
-        const history = await EmbedChats.forEmbedByUser(embed.id, sessionId);
-        response.status(200).json({
-          history: convertToChatHistory(history),
-        });
+        response.status(200).json({ history: convertToChatHistory(history) });
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }
@@ -93,7 +100,7 @@ function embeddedEndpoints(app) {
         await EmbedChats.markHistoryInvalid(embed.id, sessionId);
         response.status(200).end();
       } catch (e) {
-        console.log(e.message, e);
+        console.error(e.message, e);
         response.sendStatus(500).end();
       }
     }

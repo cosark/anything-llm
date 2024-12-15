@@ -21,7 +21,7 @@ class PerplexityLLM {
     this.model =
       modelPreference ||
       process.env.PERPLEXITY_MODEL_PREF ||
-      "sonar-small-online"; // Give at least a unique model to the provider as last fallback.
+      "llama-3-sonar-large-32k-online"; // Give at least a unique model to the provider as last fallback.
     this.limits = {
       history: this.promptWindowLimit() * 0.15,
       system: this.promptWindowLimit() * 0.15,
@@ -52,6 +52,11 @@ class PerplexityLLM {
     return "streamGetChatCompletion" in this;
   }
 
+  static promptWindowLimit(modelName) {
+    const availableModels = perplexityModels();
+    return availableModels[modelName]?.maxLength || 4096;
+  }
+
   promptWindowLimit() {
     const availableModels = this.allModelInformation();
     return availableModels[this.model]?.maxLength || 4096;
@@ -75,11 +80,6 @@ class PerplexityLLM {
     return [prompt, ...chatHistory, { role: "user", content: userPrompt }];
   }
 
-  async isSafe(_input = "") {
-    // Not implemented so must be stubbed
-    return { safe: true, reasons: [] };
-  }
-
   async getChatCompletion(messages = null, { temperature = 0.7 }) {
     if (!(await this.isValidChatCompletionModel(this.model)))
       throw new Error(
@@ -93,7 +93,7 @@ class PerplexityLLM {
         temperature,
       })
       .catch((e) => {
-        throw new Error(e.response.data.error.message);
+        throw new Error(e.message);
       });
 
     if (!result.hasOwnProperty("choices") || result.choices.length === 0)

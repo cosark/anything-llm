@@ -2,10 +2,11 @@ import Workspace from "@/models/workspace";
 import showToast from "@/utils/toast";
 import { Plus } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function WorkspacePfp({ workspace, slug }) {
   const [pfp, setPfp] = useState(null);
-
+  const { t } = useTranslation();
   useEffect(() => {
     async function fetchWorkspace() {
       const pfpUrl = await Workspace.fetchPfp(slug);
@@ -47,14 +48,14 @@ export default function WorkspacePfp({ workspace, slug }) {
   return (
     <div className="mt-6">
       <div className="flex flex-col">
-        <label className="block input-label">Assistant Profile Image</label>
+        <label className="block input-label">{t("general.pfp.title")}</label>
         <p className="text-white text-opacity-60 text-xs font-medium py-1.5">
-          Customize the profile image of the assistant for this workspace.
+          {t("general.pfp.description")}
         </p>
       </div>
       <div className="flex flex-col md:flex-row items-center gap-8">
         <div className="flex flex-col items-center">
-          <label className="w-36 h-36 flex flex-col items-center justify-center bg-zinc-900/50 transition-all duration-300 rounded-full mt-8 border-2 border-dashed border-white border-opacity-60 cursor-pointer hover:opacity-60">
+          <label className="w-36 h-36 flex flex-col items-center justify-center bg-theme-settings-input-bg transition-all duration-300 rounded-full mt-8 border-2 border-dashed border-white border-opacity-60 cursor-pointer hover:opacity-60">
             <input
               id="workspace-pfp-upload"
               type="file"
@@ -66,15 +67,15 @@ export default function WorkspacePfp({ workspace, slug }) {
               <img
                 src={pfp}
                 alt="User profile picture"
-                className="w-36 h-36 rounded-full object-cover bg-white"
+                className="w-36 h-36 rounded-full object-cover bg-theme-bg-secondary"
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-3">
-                <Plus className="w-8 h-8 text-white/80 m-2" />
-                <span className="text-white text-opacity-80 text-xs font-semibold">
-                  Workspace Image
+                <Plus className="w-8 h-8 text-theme-text-secondary m-2" />
+                <span className="text-theme-text-secondary text-opacity-80 text-xs font-semibold">
+                  {t("general.pfp.image")}
                 </span>
-                <span className="text-white text-opacity-60 text-xs">
+                <span className="text-theme-text-secondary text-opacity-60 text-xs">
                   800 x 800
                 </span>
               </div>
@@ -84,9 +85,9 @@ export default function WorkspacePfp({ workspace, slug }) {
             <button
               type="button"
               onClick={handleRemovePfp}
-              className="mt-3 text-white text-opacity-60 text-sm font-medium hover:underline"
+              className="mt-3 text-theme-text-secondary text-opacity-60 text-sm font-medium hover:underline"
             >
-              Remove Workspace Image
+              {t("general.pfp.remove")}
             </button>
           )}
         </div>

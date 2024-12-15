@@ -40,12 +40,34 @@ class TogetherAiLLM {
     );
   }
 
+  #generateContent({ userPrompt, attachments = [] }) {
+    if (!attachments.length) {
+      return userPrompt;
+    }
+
+    const content = [{ type: "text", text: userPrompt }];
+    for (let attachment of attachments) {
+      content.push({
+        type: "image_url",
+        image_url: {
+          url: attachment.contentString,
+        },
+      });
+    }
+    return content.flat();
+  }
+
   allModelInformation() {
     return togetherAiModels();
   }
 
   streamingEnabled() {
     return "streamGetChatCompletion" in this;
+  }
+
+  static promptWindowLimit(modelName) {
+    const availableModels = togetherAiModels();
+    return availableModels[modelName]?.maxLength || 4096;
   }
 
   // Ensure the user set a value for the token limit
@@ -65,17 +87,20 @@ class TogetherAiLLM {
     contextTexts = [],
     chatHistory = [],
     userPrompt = "",
+    attachments = [],
   }) {
     const prompt = {
       role: "system",
       content: `${systemPrompt}${this.#appendContext(contextTexts)}`,
     };
-    return [prompt, ...chatHistory, { role: "user", content: userPrompt }];
-  }
-
-  async isSafe(_input = "") {
-    // Not implemented so must be stubbed
-    return { safe: true, reasons: [] };
+    return [
+      prompt,
+      ...chatHistory,
+      {
+        role: "user",
+        content: this.#generateContent({ userPrompt, attachments }),
+      },
+    ];
   }
 
   async getChatCompletion(messages = null, { temperature = 0.7 }) {

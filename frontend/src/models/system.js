@@ -1,11 +1,15 @@
 import { API_BASE, AUTH_TIMESTAMP, fullApiUrl } from "@/utils/constants";
 import { baseHeaders, safeJsonParse } from "@/utils/request";
 import DataConnector from "./dataConnector";
+import LiveDocumentSync from "./experimental/liveSync";
+import AgentPlugins from "./experimental/agentPlugins";
 
 const System = {
   cacheKeys: {
     footerIcons: "anythingllm_footer_links",
     supportEmail: "anythingllm_support_email",
+    customAppName: "anythingllm_custom_app_name",
+    canViewChatHistory: "anythingllm_can_view_chat_history",
   },
   ping: async function () {
     return await fetch(`${API_BASE}/ping`)
@@ -305,19 +309,64 @@ const System = {
     );
     return { email: supportEmail, error: null };
   },
+
+  fetchCustomAppName: async function () {
+    const cache = window.localStorage.getItem(this.cacheKeys.customAppName);
+    const { appName, lastFetched } = cache
+      ? safeJsonParse(cache, { appName: "", lastFetched: 0 })
+      : { appName: "", lastFetched: 0 };
+
+    if (!!appName && Date.now() - lastFetched < 3_600_000)
+      return { appName: appName, error: null };
+
+    const { customAppName, error } = await fetch(
+      `${API_BASE}/system/custom-app-name`,
+      {
+        method: "GET",
+        cache: "no-cache",
+        headers: baseHeaders(),
+      }
+    )
+      .then((res) => res.json())
+      .catch((e) => {
+        console.log(e);
+        return { customAppName: "", error: e.message };
+      });
+
+    if (!customAppName || !!error) {
+      window.localStorage.removeItem(this.cacheKeys.customAppName);
+      return { appName: "", error: null };
+    }
+
+    window.localStorage.setItem(
+      this.cacheKeys.customAppName,
+      JSON.stringify({ appName: customAppName, lastFetched: Date.now() })
+    );
+    return { appName: customAppName, error: null };
+  },
   fetchLogo: async function () {
-    return await fetch(`${API_BASE}/system/logo`, {
+    const url = new URL(`${fullApiUrl()}/system/logo`);
+    url.searchParams.append(
+      "theme",
+      localStorage.getItem("theme") || "default"
+    );
+
+    return await fetch(url, {
       method: "GET",
       cache: "no-cache",
     })
-      .then((res) => {
-        if (res.ok && res.status !== 204) return res.blob();
+      .then(async (res) => {
+        if (res.ok && res.status !== 204) {
+          const isCustomLogo = res.headers.get("X-Is-Custom-Logo") === "true";
+          const blob = await res.blob();
+          const logoURL = URL.createObjectURL(blob);
+          return { isCustomLogo, logoURL };
+        }
         throw new Error("Failed to fetch logo!");
       })
-      .then((blob) => URL.createObjectURL(blob))
       .catch((e) => {
         console.log(e);
-        return null;
+        return { isCustomLogo: false, logoURL: null };
       });
   },
   fetchPfp: async function (id) {
@@ -377,22 +426,6 @@ const System = {
       .catch((e) => {
         console.log(e);
         return { success: false, error: e.message };
-      });
-  },
-  getCanDeleteWorkspaces: async function () {
-    return await fetch(`${API_BASE}/system/can-delete-workspaces`, {
-      method: "GET",
-      cache: "no-cache",
-      headers: baseHeaders(),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Could not fetch can delete workspaces.");
-        return res.json();
-      })
-      .then((res) => res?.canDelete)
-      .catch((e) => {
-        console.error(e);
-        return false;
       });
   },
   getWelcomeMessages: async function () {
@@ -471,10 +504,23 @@ const System = {
         return false;
       });
   },
-  customModels: async function (provider, apiKey = null, basePath = null) {
+  customModels: async function (
+    provider,
+    apiKey = null,
+    basePath = null,
+    timeout = null
+  ) {
+    const controller = new AbortController();
+    if (!!timeout) {
+      setTimeout(() => {
+        controller.abort("Request timed out.");
+      }, timeout);
+    }
+
     return fetch(`${API_BASE}/system/custom-models`, {
       method: "POST",
       headers: baseHeaders(),
+      signal: controller.signal,
       body: JSON.stringify({
         provider,
         apiKey,
@@ -538,9 +584,10 @@ const System = {
         return { success: false, error: e.message };
       });
   },
-  exportChats: async (type = "csv") => {
+  exportChats: async (type = "csv", chatType = "workspace") => {
     const url = new URL(`${fullApiUrl()}/system/export-chats`);
     url.searchParams.append("type", encodeURIComponent(type));
+    url.searchParams.append("chatType", encodeURIComponent(chatType));
     return await fetch(url, {
       method: "GET",
       headers: baseHeaders(),
@@ -634,6 +681,64 @@ const System = {
         console.error(e);
         return false;
       });
+  },
+
+  /**
+   * Fetches the can view chat history state from local storage or the system settings.
+   * Notice: This is an instance setting that cannot be changed via the UI and it is cached
+   * in local storage for 24 hours.
+   * @returns {Promise<{viewable: boolean, error: string | null}>}
+   */
+  fetchCanViewChatHistory: async function () {
+    const cache = window.localStorage.getItem(
+      this.cacheKeys.canViewChatHistory
+    );
+    const { viewable, lastFetched } = cache
+      ? safeJsonParse(cache, { viewable: false, lastFetched: 0 })
+      : { viewable: false, lastFetched: 0 };
+
+    // Since this is an instance setting that cannot be changed via the UI,
+    // we can cache it in local storage for a day and if the admin changes it,
+    // they should instruct the users to clear local storage.
+    if (typeof viewable === "boolean" && Date.now() - lastFetched < 8.64e7)
+      return { viewable, error: null };
+
+    const res = await System.keys();
+    const isViewable = res?.DisableViewChatHistory === false;
+
+    window.localStorage.setItem(
+      this.cacheKeys.canViewChatHistory,
+      JSON.stringify({ viewable: isViewable, lastFetched: Date.now() })
+    );
+    return { viewable: isViewable, error: null };
+  },
+
+  /**
+   * Validates a temporary auth token and logs in the user if the token is valid.
+   * @param {string} publicToken - the token to validate against
+   * @returns {Promise<{valid: boolean, user: import("@prisma/client").users | null, token: string | null, message: string | null}>}
+   */
+  simpleSSOLogin: async function (publicToken) {
+    return fetch(`${API_BASE}/request-token/sso/simple?token=${publicToken}`, {
+      method: "GET",
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          if (!text.startsWith("{")) throw new Error(text);
+          return JSON.parse(text);
+        }
+        return await res.json();
+      })
+      .catch((e) => {
+        console.error(e);
+        return { valid: false, user: null, token: null, message: e.message };
+      });
+  },
+
+  experimentalFeatures: {
+    liveSync: LiveDocumentSync,
+    agentPlugins: AgentPlugins,
   },
 };
 

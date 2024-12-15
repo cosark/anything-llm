@@ -11,6 +11,10 @@ const ACCEPTED_MIMES = {
     ".pptx",
   ],
 
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+    ".xlsx",
+  ],
+
   "application/vnd.oasis.opendocument.text": [".odt"],
   "application/vnd.oasis.opendocument.presentation": [".odp"],
 
@@ -33,13 +37,15 @@ const SUPPORTED_FILETYPE_CONVERTERS = {
   ".rst": "./convert/asTxt.js",
 
   ".html": "./convert/asTxt.js",
-  ".pdf": "./convert/asPDF.js",
+  ".pdf": "./convert/asPDF/index.js",
 
   ".docx": "./convert/asDocx.js",
   ".pptx": "./convert/asOfficeMime.js",
 
   ".odt": "./convert/asOfficeMime.js",
   ".odp": "./convert/asOfficeMime.js",
+
+  ".xlsx": "./convert/asXlsx.js",
 
   ".mbox": "./convert/asMbox.js",
 

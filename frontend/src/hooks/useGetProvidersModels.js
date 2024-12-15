@@ -4,32 +4,49 @@ import { useEffect, useState } from "react";
 // Providers which cannot use this feature for workspace<>model selection
 export const DISABLED_PROVIDERS = [
   "azure",
-  "lmstudio",
   "native",
   "textgenwebui",
+  "generic-openai",
+  "bedrock",
 ];
 const PROVIDER_DEFAULT_MODELS = {
   openai: [],
-  gemini: ["gemini-pro", "gemini-1.5-pro-latest"],
+  gemini: [
+    "gemini-pro",
+    "gemini-1.0-pro",
+    "gemini-1.5-pro-latest",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro-exp-0801",
+    "gemini-1.5-pro-exp-0827",
+    "gemini-1.5-flash-exp-0827",
+    "gemini-1.5-flash-8b-exp-0827",
+    "gemini-exp-1114",
+    "gemini-exp-1121",
+    "gemini-exp-1206",
+    "learnlm-1.5-pro-experimental",
+    "gemini-2.0-flash-exp",
+  ],
   anthropic: [
     "claude-instant-1.2",
     "claude-2.0",
     "claude-2.1",
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
     "claude-3-haiku-20240307",
+    "claude-3-sonnet-20240229",
+    "claude-3-opus-latest",
+    "claude-3-5-haiku-latest",
+    "claude-3-5-haiku-20241022",
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
   ],
   azure: [],
   lmstudio: [],
   localai: [],
   ollama: [],
   togetherai: [],
-  groq: [
-    "mixtral-8x7b-32768",
-    "llama3-8b-8192",
-    "llama3-70b-8192",
-    "gemma-7b-it",
-  ],
+  fireworksai: [],
+  "nvidia-nim": [],
+  groq: [],
   native: [],
   cohere: [
     "command-r",
@@ -40,9 +57,12 @@ const PROVIDER_DEFAULT_MODELS = {
     "command-light-nightly",
   ],
   textgenwebui: [],
+  "generic-openai": [],
+  bedrock: [],
+  xai: ["grok-beta"],
 };
 
-// For togetherAi, which has a large model list - we subgroup the options
+// For providers with large model lists (e.g. togetherAi) - we subgroup the options
 // by their creator organization (eg: Meta, Mistral, etc)
 // which makes selection easier to read.
 function groupModels(models) {
@@ -53,7 +73,13 @@ function groupModels(models) {
   }, {});
 }
 
-const groupedProviders = ["togetherai", "openai", "openrouter"];
+const groupedProviders = [
+  "togetherai",
+  "fireworksai",
+  "openai",
+  "novita",
+  "openrouter",
+];
 export default function useGetProviderModels(provider = null) {
   const [defaultModels, setDefaultModels] = useState([]);
   const [customModels, setCustomModels] = useState([]);

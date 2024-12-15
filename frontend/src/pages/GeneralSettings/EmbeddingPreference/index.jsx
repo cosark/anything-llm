@@ -11,6 +11,9 @@ import OllamaLogo from "@/media/llmprovider/ollama.png";
 import LMStudioLogo from "@/media/llmprovider/lmstudio.png";
 import CohereLogo from "@/media/llmprovider/cohere.png";
 import VoyageAiLogo from "@/media/embeddingprovider/voyageai.png";
+import LiteLLMLogo from "@/media/llmprovider/litellm.png";
+import GenericOpenAiLogo from "@/media/llmprovider/generic-openai.png";
+import MistralAiLogo from "@/media/llmprovider/mistral.jpeg";
 
 import PreLoader from "@/components/Preloader";
 import ChangeWarningModal from "@/components/ChangeWarning";
@@ -22,12 +25,16 @@ import OllamaEmbeddingOptions from "@/components/EmbeddingSelection/OllamaOption
 import LMStudioEmbeddingOptions from "@/components/EmbeddingSelection/LMStudioOptions";
 import CohereEmbeddingOptions from "@/components/EmbeddingSelection/CohereOptions";
 import VoyageAiOptions from "@/components/EmbeddingSelection/VoyageAiOptions";
+import LiteLLMOptions from "@/components/EmbeddingSelection/LiteLLMOptions";
+import GenericOpenAiEmbeddingOptions from "@/components/EmbeddingSelection/GenericOpenAiOptions";
 
 import EmbedderItem from "@/components/EmbeddingSelection/EmbedderItem";
 import { CaretUpDown, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useModal } from "@/hooks/useModal";
 import ModalWrapper from "@/components/ModalWrapper";
 import CTAButton from "@/components/lib/CTAButton";
+import { useTranslation } from "react-i18next";
+import MistralAiOptions from "@/components/EmbeddingSelection/MistralAiOptions";
 
 const EMBEDDERS = [
   {
@@ -88,6 +95,29 @@ const EMBEDDERS = [
     options: (settings) => <VoyageAiOptions settings={settings} />,
     description: "Run powerful embedding models from Voyage AI.",
   },
+  {
+    name: "LiteLLM",
+    value: "litellm",
+    logo: LiteLLMLogo,
+    options: (settings) => <LiteLLMOptions settings={settings} />,
+    description: "Run powerful embedding models from LiteLLM.",
+  },
+  {
+    name: "Mistral AI",
+    value: "mistral",
+    logo: MistralAiLogo,
+    options: (settings) => <MistralAiOptions settings={settings} />,
+    description: "Run powerful embedding models from Mistral AI.",
+  },
+  {
+    name: "Generic OpenAI",
+    value: "generic-openai",
+    logo: GenericOpenAiLogo,
+    options: (settings) => (
+      <GenericOpenAiEmbeddingOptions settings={settings} />
+    ),
+    description: "Run embedding models from any OpenAI compatible API service.",
+  },
 ];
 
 export default function GeneralEmbeddingPreference() {
@@ -103,6 +133,7 @@ export default function GeneralEmbeddingPreference() {
   const [searchMenuOpen, setSearchMenuOpen] = useState(false);
   const searchInputRef = useRef(null);
   const { isOpen, openModal, closeModal } = useModal();
+  const { t } = useTranslation();
 
   function embedderModelChanged(formEl) {
     try {
@@ -189,12 +220,12 @@ export default function GeneralEmbeddingPreference() {
   );
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-sidebar flex">
+    <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
       <Sidebar />
       {loading ? (
         <div
           style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-          className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-main-gradient w-full h-full overflow-y-scroll"
+          className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-theme-bg-secondary w-full h-full overflow-y-scroll p-4 md:p-0"
         >
           <div className="w-full h-full flex justify-center items-center">
             <PreLoader />
@@ -203,28 +234,24 @@ export default function GeneralEmbeddingPreference() {
       ) : (
         <div
           style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-          className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-main-gradient w-full h-full overflow-y-scroll"
+          className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-theme-bg-secondary w-full h-full overflow-y-scroll p-4 md:p-0"
         >
           <form
             id="embedding-form"
             onSubmit={handleSubmit}
             className="flex w-full"
           >
-            <div className="flex flex-col w-full px-1 md:pl-6 md:pr-[50px] md:py-6 py-16">
-              <div className="w-full flex flex-col gap-y-1 pb-6 border-white border-b-2 border-opacity-10">
+            <div className="flex flex-col w-full px-1 md:pl-6 md:pr-[50px] py-16 md:py-6">
+              <div className="w-full flex flex-col gap-y-1 pb-6 border-white light:border-theme-sidebar-border border-b-2 border-opacity-10">
                 <div className="flex gap-x-4 items-center">
                   <p className="text-lg leading-6 font-bold text-white">
-                    Embedding Preference
+                    {t("embedding.title")}
                   </p>
                 </div>
                 <p className="text-xs leading-[18px] font-base text-white text-opacity-60">
-                  When using an LLM that does not natively support an embedding
-                  engine - you may need to additionally specify credentials to
-                  for embedding text.
+                  {t("embedding.desc-start")}
                   <br />
-                  Embedding is the process of turning text into vectors. These
-                  credentials are required to turn your files and prompts into a
-                  format which AnythingLLM can use to process.
+                  {t("embedding.desc-end")}
                 </p>
               </div>
               <div className="w-full justify-end flex">
@@ -233,12 +260,12 @@ export default function GeneralEmbeddingPreference() {
                     onClick={() => handleSubmit()}
                     className="mt-3 mr-0 -mb-14 z-10"
                   >
-                    {saving ? "Saving..." : "Save changes"}
+                    {saving ? t("common.saving") : t("common.save")}
                   </CTAButton>
                 )}
               </div>
               <div className="text-base font-bold text-white mt-6 mb-4">
-                Embedding Provider
+                {t("embedding.provider.title")}
               </div>
               <div className="relative">
                 {searchMenuOpen && (
@@ -248,20 +275,20 @@ export default function GeneralEmbeddingPreference() {
                   />
                 )}
                 {searchMenuOpen ? (
-                  <div className="absolute top-0 left-0 w-full max-w-[640px] max-h-[310px] overflow-auto white-scrollbar min-h-[64px] bg-[#18181B] rounded-lg flex flex-col justify-between cursor-pointer border-2 border-[#46C8FF] z-20">
+                  <div className="absolute top-0 left-0 w-full max-w-[640px] max-h-[310px] overflow-auto white-scrollbar min-h-[64px] bg-theme-settings-input-bg rounded-lg flex flex-col justify-between cursor-pointer border-2 border-primary-button z-20">
                     <div className="w-full flex flex-col gap-y-1">
-                      <div className="flex items-center sticky top-0 border-b border-[#9CA3AF] mx-4 bg-[#18181B]">
+                      <div className="flex items-center sticky top-0 border-b border-[#9CA3AF] mx-4 bg-theme-settings-input-bg">
                         <MagnifyingGlass
                           size={20}
                           weight="bold"
-                          className="absolute left-4 z-30 text-white -ml-4 my-2"
+                          className="absolute left-4 z-30 text-theme-text-primary -ml-4 my-2"
                         />
                         <input
                           type="text"
                           name="embedder-search"
                           autoComplete="off"
                           placeholder="Search all embedding providers"
-                          className="-ml-4 my-2 bg-transparent z-20 pl-12 h-[38px] w-full px-4 py-1 text-sm outline-none focus:border-white text-white placeholder:text-white placeholder:font-medium"
+                          className="border-none -ml-4 my-2 bg-transparent z-20 pl-12 h-[38px] w-full px-4 py-1 text-sm outline-none text-theme-text-primary placeholder:text-theme-text-primary placeholder:font-medium"
                           onChange={(e) => setSearchQuery(e.target.value)}
                           ref={searchInputRef}
                           onKeyDown={(e) => {
@@ -271,7 +298,7 @@ export default function GeneralEmbeddingPreference() {
                         <X
                           size={20}
                           weight="bold"
-                          className="cursor-pointer text-white hover:text-[#9CA3AF]"
+                          className="cursor-pointer text-white hover:text-x-button"
                           onClick={handleXButton}
                         />
                       </div>
@@ -292,7 +319,7 @@ export default function GeneralEmbeddingPreference() {
                   </div>
                 ) : (
                   <button
-                    className="w-full max-w-[640px] h-[64px] bg-[#18181B] rounded-lg flex items-center p-[14px] justify-between cursor-pointer border-2 border-transparent hover:border-[#46C8FF] transition-all duration-300"
+                    className="w-full max-w-[640px] h-[64px] bg-theme-settings-input-bg rounded-lg flex items-center p-[14px] justify-between cursor-pointer border-2 border-transparent hover:border-primary-button transition-all duration-300"
                     type="button"
                     onClick={() => setSearchMenuOpen(true)}
                   >
@@ -306,7 +333,7 @@ export default function GeneralEmbeddingPreference() {
                         <div className="text-sm font-semibold text-white">
                           {selectedEmbedderObject.name}
                         </div>
-                        <div className="mt-1 text-xs text-[#D2D5DB]">
+                        <div className="mt-1 text-xs text-description">
                           {selectedEmbedderObject.description}
                         </div>
                       </div>

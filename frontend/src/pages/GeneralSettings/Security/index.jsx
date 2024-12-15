@@ -7,14 +7,15 @@ import paths from "@/utils/paths";
 import { AUTH_TIMESTAMP, AUTH_TOKEN, AUTH_USER } from "@/utils/constants";
 import PreLoader from "@/components/Preloader";
 import CTAButton from "@/components/lib/CTAButton";
+import { useTranslation } from "react-i18next";
 
 export default function GeneralSecurity() {
   return (
-    <div className="w-screen h-screen overflow-hidden bg-sidebar flex">
+    <div className="w-screen h-screen overflow-hidden bg-theme-bg-container flex">
       <Sidebar />
       <div
         style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-        className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-main-gradient w-full h-full overflow-y-scroll"
+        className="relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-theme-bg-secondary w-full h-full overflow-y-scroll p-4 md:p-0"
       >
         <MultiUserMode />
         <PasswordProtection />
@@ -29,6 +30,7 @@ function MultiUserMode() {
   const [useMultiUserMode, setUseMultiUserMode] = useState(false);
   const [multiUserModeEnabled, setMultiUserModeEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -86,16 +88,15 @@ function MultiUserMode() {
       onChange={() => setHasChanges(true)}
       className="flex flex-col w-full px-1 md:pl-6 md:pr-[50px] md:py-6 py-16"
     >
-      <div className="w-full flex flex-col gap-y-1 pb-6 border-white border-b-2 border-opacity-10">
-        <div className="w-full flex flex-col gap-y-1">
+      <div className="w-full flex flex-col gap-y-1 pb-6 border-white light:border-theme-sidebar-border border-b-2 border-opacity-10">
+        <div className="w-full flex flex-col gap-y-1 border-white light:border-theme-sidebar-border border-b-2 border-opacity-10 pb-8">
           <div className="items-center flex gap-x-4">
             <p className="text-lg leading-6 font-bold text-white">
-              Multi-User Mode
+              {t("multi.title")}
             </p>
           </div>
           <p className="text-xs leading-[18px] font-base text-white text-opacity-60">
-            Set up your instance to support your team by activating Multi-User
-            Mode.
+            {t("multi.description")}
           </p>
         </div>
         {hasChanges && (
@@ -104,7 +105,7 @@ function MultiUserMode() {
               onClick={() => handleSubmit()}
               className="mt-3 mr-0 -mb-20 z-10"
             >
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? t("common.saving") : t("common.save")}
             </CTAButton>
           </div>
         )}
@@ -116,21 +117,21 @@ function MultiUserMode() {
                 <div className="">
                   <label className="mb-2.5 block font-medium text-white">
                     {multiUserModeEnabled
-                      ? "Multi-User Mode is Enabled"
-                      : "Enable Multi-User Mode"}
+                      ? t("multi.enable.is-enable")
+                      : t("multi.enable.enable")}
                   </label>
 
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
                       type="checkbox"
                       onClick={() => setUseMultiUserMode(!useMultiUserMode)}
-                      checked={useMultiUserMode}
+                      defaultChecked={useMultiUserMode}
                       className="peer sr-only pointer-events-none"
                     />
                     <div
                       hidden={multiUserModeEnabled}
-                      className="pointer-events-none peer h-6 w-11 rounded-full bg-stone-400 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:shadow-xl after:border after:border-gray-600 after:bg-white after:box-shadow-md after:transition-all after:content-[''] peer-checked:bg-lime-300 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800"
-                    ></div>
+                      className="peer-disabled:opacity-50 pointer-events-none peer h-6 w-11 rounded-full bg-[#CFCFD0] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:shadow-xl after:border-none after:bg-white after:box-shadow-md after:transition-all after:content-[''] peer-checked:bg-[#32D583] peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-transparent"
+                    />
                   </label>
                 </div>
                 {useMultiUserMode && (
@@ -140,12 +141,12 @@ function MultiUserMode() {
                         htmlFor="username"
                         className="block mb-3 font-medium text-white"
                       >
-                        Admin account username
+                        {t("multi.enable.username")}
                       </label>
                       <input
                         name="username"
                         type="text"
-                        className="bg-zinc-900 text-white text-sm rounded-lg focus:border-blue-500 block w-full p-2.5 placeholder:text-white/20 focus:ring-blue-500"
+                        className="border-none bg-theme-settings-input-bg text-white text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-full p-2.5 placeholder:text-theme-settings-input-placeholder focus:ring-blue-500"
                         placeholder="Your admin username"
                         minLength={2}
                         required={true}
@@ -159,12 +160,12 @@ function MultiUserMode() {
                         htmlFor="password"
                         className="block mb-3 font-medium text-white"
                       >
-                        Admin account password
+                        {t("multi.enable.password")}
                       </label>
                       <input
                         name="password"
                         type="text"
-                        className="bg-zinc-900 text-white text-sm rounded-lg focus:border-blue-500 block w-full p-2.5 placeholder:text-white/20 focus:ring-blue-500"
+                        className="border-none bg-theme-settings-input-bg text-white text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-full p-2.5 placeholder:text-theme-settings-input-placeholder focus:ring-blue-500"
                         placeholder="Your admin password"
                         minLength={8}
                         required={true}
@@ -177,10 +178,8 @@ function MultiUserMode() {
               </div>
             </div>
             <div className="flex items-center justify-between space-x-14">
-              <p className="text-white/80 text-xs rounded-lg w-96">
-                By default, you will be the only admin. As an admin you will
-                need to create accounts for all new users or admins. Do not lose
-                your password as only an Admin user can reset passwords.
+              <p className="text-white text-opacity-80 text-xs rounded-lg w-96">
+                {t("multi.enable.description")}
               </p>
             </div>
           </div>
@@ -197,6 +196,7 @@ function PasswordProtection() {
   const [multiUserModeEnabled, setMultiUserModeEnabled] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -265,16 +265,15 @@ function PasswordProtection() {
       onChange={() => setHasChanges(true)}
       className="flex flex-col w-full px-1 md:pl-6 md:pr-[50px] md:py-6 py-16"
     >
-      <div className="w-full flex flex-col gap-y-1 pb-6 border-white border-b-2 border-opacity-10">
+      <div className="w-full flex flex-col gap-y-1 pb-6 border-white light:border-theme-sidebar-border border-b-2 border-opacity-10">
         <div className="w-full flex flex-col gap-y-1">
           <div className="items-center flex gap-x-4">
             <p className="text-lg leading-6 font-bold text-white">
-              Password Protection
+              {t("multi.password.title")}
             </p>
           </div>
           <p className="text-xs leading-[18px] font-base text-white text-opacity-60">
-            Protect your AnythingLLM instance with a password. If you forget
-            this there is no recovery method so ensure you save this password.
+            {t("multi.password.description")}
           </p>
         </div>
         {hasChanges && (
@@ -283,7 +282,7 @@ function PasswordProtection() {
               onClick={() => handleSubmit()}
               className="mt-3 mr-0 -mb-20 z-10"
             >
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? t("common.saving") : t("common.save")}
             </CTAButton>
           </div>
         )}
@@ -294,17 +293,17 @@ function PasswordProtection() {
               <div className="w-full flex flex-col gap-y-4">
                 <div className="">
                   <label className="mb-2.5 block font-medium text-white">
-                    Password Protect Instance
+                    {t("multi.instance.title")}
                   </label>
 
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
                       type="checkbox"
                       onClick={() => setUsePassword(!usePassword)}
-                      checked={usePassword}
+                      defaultChecked={usePassword}
                       className="peer sr-only pointer-events-none"
                     />
-                    <div className="pointer-events-none peer h-6 w-11 rounded-full bg-stone-400 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:shadow-xl after:border after:border-gray-600 after:bg-white after:box-shadow-md after:transition-all after:content-[''] peer-checked:bg-lime-300 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800"></div>
+                    <div className="peer-disabled:opacity-50 pointer-events-none peer h-6 w-11 rounded-full bg-[#CFCFD0] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:shadow-xl after:border-none after:bg-white after:box-shadow-md after:transition-all after:content-[''] peer-checked:bg-[#32D583] peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-transparent" />
                   </label>
                 </div>
                 {usePassword && (
@@ -314,12 +313,12 @@ function PasswordProtection() {
                         htmlFor="password"
                         className="block mb-3 font-medium text-white"
                       >
-                        Instance password
+                        {t("multi.instance.password")}
                       </label>
                       <input
                         name="password"
                         type="text"
-                        className="bg-zinc-900 text-white text-sm rounded-lg focus:border-blue-500 block w-full p-2.5 placeholder:text-white/20 focus:ring-blue-500"
+                        className="border-none bg-theme-settings-input-bg text-white text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-full p-2.5 placeholder:text-theme-settings-input-placeholder"
                         placeholder="Your Instance Password"
                         minLength={8}
                         required={true}
@@ -332,10 +331,8 @@ function PasswordProtection() {
               </div>
             </div>
             <div className="flex items-center justify-between space-x-14">
-              <p className="text-white/80 text-xs rounded-lg w-96">
-                By default, anyone with this password can log into the instance.
-                Do not lose this password as only the instance maintainer is
-                able to retrieve or reset the password once set.
+              <p className="text-white text-opacity-80 light:text-theme-text text-xs rounded-lg w-96">
+                {t("multi.instance.description")}
               </p>
             </div>
           </div>

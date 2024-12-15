@@ -2,6 +2,7 @@ process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
 
+require("./utils/logger")();
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -15,12 +16,14 @@ const extensions = require("./extensions");
 const { processRawText } = require("./processRawText");
 const { verifyPayloadIntegrity } = require("./middleware/verifyIntegrity");
 const app = express();
+const FILE_LIMIT = "3GB";
 
 app.use(cors({ origin: true }));
 app.use(
-  bodyParser.text(),
-  bodyParser.json(),
+  bodyParser.text({ limit: FILE_LIMIT }),
+  bodyParser.json({ limit: FILE_LIMIT }),
   bodyParser.urlencoded({
+    limit: FILE_LIMIT,
     extended: true,
   })
 );

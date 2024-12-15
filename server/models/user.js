@@ -1,7 +1,19 @@
 const prisma = require("../utils/prisma");
 const { EventLogs } = require("./eventLogs");
 
+/**
+ * @typedef {Object} User
+ * @property {number} id
+ * @property {string} username
+ * @property {string} password
+ * @property {string} pfpFilename
+ * @property {string} role
+ * @property {boolean} suspended
+ * @property {number|null} dailyMessageLimit
+ */
+
 const User = {
+  usernameRegex: new RegExp(/^[a-z0-9_-]+$/),
   writable: [
     // Used for generic updates so we can validate keys in request body
     "username",
@@ -9,39 +21,92 @@ const User = {
     "pfpFilename",
     "role",
     "suspended",
+    "dailyMessageLimit",
   ],
+  validations: {
+    username: (newValue = "") => {
+      try {
+        if (String(newValue).length > 100)
+          throw new Error("Username cannot be longer than 100 characters");
+        if (String(newValue).length < 2)
+          throw new Error("Username must be at least 2 characters");
+        return String(newValue);
+      } catch (e) {
+        throw new Error(e.message);
+      }
+    },
+    role: (role = "default") => {
+      const VALID_ROLES = ["default", "admin", "manager"];
+      if (!VALID_ROLES.includes(role)) {
+        throw new Error(
+          `Invalid role. Allowed roles are: ${VALID_ROLES.join(", ")}`
+        );
+      }
+      return String(role);
+    },
+    dailyMessageLimit: (dailyMessageLimit = null) => {
+      if (dailyMessageLimit === null) return null;
+      const limit = Number(dailyMessageLimit);
+      if (isNaN(limit) || limit < 1) {
+        throw new Error(
+          "Daily message limit must be null or a number greater than or equal to 1"
+        );
+      }
+      return limit;
+    },
+  },
   // validations for the above writable fields.
   castColumnValue: function (key, value) {
     switch (key) {
       case "suspended":
         return Number(Boolean(value));
+      case "dailyMessageLimit":
+        return value === null ? null : Number(value);
       default:
         return String(value);
     }
   },
-  create: async function ({ username, password, role = "default" }) {
+
+  filterFields: function (user = {}) {
+    const { password, ...rest } = user;
+    return { ...rest };
+  },
+
+  create: async function ({
+    username,
+    password,
+    role = "default",
+    dailyMessageLimit = null,
+  }) {
     const passwordCheck = this.checkPasswordComplexity(password);
     if (!passwordCheck.checkedOK) {
       return { user: null, error: passwordCheck.error };
     }
 
     try {
+      // Do not allow new users to bypass validation
+      if (!this.usernameRegex.test(username))
+        throw new Error(
+          "Username must only contain lowercase letters, numbers, underscores, and hyphens with no spaces"
+        );
+
       const bcrypt = require("bcrypt");
       const hashedPassword = bcrypt.hashSync(password, 10);
       const user = await prisma.users.create({
         data: {
-          username,
+          username: this.validations.username(username),
           password: hashedPassword,
-          role,
+          role: this.validations.role(role),
+          dailyMessageLimit:
+            this.validations.dailyMessageLimit(dailyMessageLimit),
         },
       });
-      return { user, error: null };
+      return { user: this.filterFields(user), error: null };
     } catch (error) {
       console.error("FAILED TO CREATE USER.", error.message);
       return { user: null, error: error.message };
     }
   },
-
   // Log the changes to a user object, but omit sensitive fields
   // that are not meant to be logged.
   loggedChanges: function (updates, prev = {}) {
@@ -64,12 +129,17 @@ const User = {
         where: { id: parseInt(userId) },
       });
       if (!currentUser) return { success: false, error: "User not found" };
-
       // Removes non-writable fields for generic updates
       // and force-casts to the proper type;
       Object.entries(updates).forEach(([key, value]) => {
         if (this.writable.includes(key)) {
-          updates[key] = this.castColumnValue(key, value);
+          if (this.validations.hasOwnProperty(key)) {
+            updates[key] = this.validations[key](
+              this.castColumnValue(key, value)
+            );
+          } else {
+            updates[key] = this.castColumnValue(key, value);
+          }
           return;
         }
         delete updates[key];
@@ -87,6 +157,17 @@ const User = {
         const bcrypt = require("bcrypt");
         updates.password = bcrypt.hashSync(updates.password, 10);
       }
+
+      if (
+        updates.hasOwnProperty("username") &&
+        currentUser.username !== updates.username &&
+        !this.usernameRegex.test(updates.username)
+      )
+        return {
+          success: false,
+          error:
+            "Username must only contain lowercase letters, numbers, underscores, and hyphens with no spaces",
+        };
 
       const user = await prisma.users.update({
         where: { id: parseInt(userId) },
@@ -129,6 +210,16 @@ const User = {
   get: async function (clause = {}) {
     try {
       const user = await prisma.users.findFirst({ where: clause });
+      return user ? this.filterFields({ ...user }) : null;
+    } catch (error) {
+      console.error(error.message);
+      return null;
+    }
+  },
+  // Returns user object with all fields
+  _get: async function (clause = {}) {
+    try {
+      const user = await prisma.users.findFirst({ where: clause });
       return user ? { ...user } : null;
     } catch (error) {
       console.error(error.message);
@@ -162,7 +253,7 @@ const User = {
         where: clause,
         ...(limit !== null ? { take: limit } : {}),
       });
-      return users;
+      return users.map((usr) => this.filterFields(usr));
     } catch (error) {
       console.error(error.message);
       return [];
@@ -199,6 +290,29 @@ const User = {
     }
 
     return { checkedOK: true, error: "No error." };
+  },
+
+  /**
+   * Check if a user can send a chat based on their daily message limit.
+   * This limit is system wide and not per workspace and only applies to
+   * multi-user mode AND non-admin users.
+   * @param {User} user The user object record.
+   * @returns {Promise<boolean>} True if the user can send a chat, false otherwise.
+   */
+  canSendChat: async function (user) {
+    const { ROLES } = require("../utils/middleware/multiUserProtected");
+    if (!user || user.dailyMessageLimit === null || user.role === ROLES.admin)
+      return true;
+
+    const { WorkspaceChats } = require("./workspaceChats");
+    const currentChatCount = await WorkspaceChats.count({
+      user_id: user.id,
+      createdAt: {
+        gte: new Date(new Date() - 24 * 60 * 60 * 1000), // 24 hours
+      },
+    });
+
+    return currentChatCount < user.dailyMessageLimit;
   },
 };
 

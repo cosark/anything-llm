@@ -55,6 +55,13 @@ class GenericOpenAiLLM {
     return "streamGetChatCompletion" in this;
   }
 
+  static promptWindowLimit(_modelName) {
+    const limit = process.env.GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT || 4096;
+    if (!limit || isNaN(Number(limit)))
+      throw new Error("No token context limit was set.");
+    return Number(limit);
+  }
+
   // Ensure the user set a value for the token limit
   // and if undefined - assume 4096 window.
   promptWindowLimit() {
@@ -83,11 +90,6 @@ class GenericOpenAiLLM {
     return [prompt, ...chatHistory, { role: "user", content: userPrompt }];
   }
 
-  async isSafe(_input = "") {
-    // Not implemented so must be stubbed
-    return { safe: true, reasons: [] };
-  }
-
   async getChatCompletion(messages = null, { temperature = 0.7 }) {
     const result = await this.openai.chat.completions
       .create({
@@ -97,7 +99,7 @@ class GenericOpenAiLLM {
         max_tokens: this.maxTokens,
       })
       .catch((e) => {
-        throw new Error(e.response.data.error.message);
+        throw new Error(e.message);
       });
 
     if (!result.hasOwnProperty("choices") || result.choices.length === 0)

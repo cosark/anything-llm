@@ -7,6 +7,8 @@ const WorkspaceChats = {
     response = {},
     user = null,
     threadId = null,
+    include = true,
+    apiSessionId = null,
   }) {
     try {
       const chat = await prisma.workspace_chats.create({
@@ -16,6 +18,8 @@ const WorkspaceChats = {
           response: JSON.stringify(response),
           user_id: user?.id || null,
           thread_id: threadId,
+          api_session_id: apiSessionId,
+          include,
         },
       });
       return { chat, message: null };
@@ -38,7 +42,33 @@ const WorkspaceChats = {
           workspaceId,
           user_id: userId,
           thread_id: null, // this function is now only used for the default thread on workspaces and users
+          api_session_id: null, // do not include api-session chats in the frontend for anyone.
           include: true,
+        },
+        ...(limit !== null ? { take: limit } : {}),
+        ...(orderBy !== null ? { orderBy } : { orderBy: { id: "asc" } }),
+      });
+      return chats;
+    } catch (error) {
+      console.error(error.message);
+      return [];
+    }
+  },
+
+  forWorkspaceByApiSessionId: async function (
+    workspaceId = null,
+    apiSessionId = null,
+    limit = null,
+    orderBy = null
+  ) {
+    if (!workspaceId || !apiSessionId) return [];
+    try {
+      const chats = await prisma.workspace_chats.findMany({
+        where: {
+          workspaceId,
+          user_id: null,
+          api_session_id: String(apiSessionId),
+          thread_id: null,
         },
         ...(limit !== null ? { take: limit } : {}),
         ...(orderBy !== null ? { orderBy } : { orderBy: { id: "asc" } }),
@@ -61,6 +91,7 @@ const WorkspaceChats = {
         where: {
           workspaceId,
           thread_id: null, // this function is now only used for the default thread on workspaces
+          api_session_id: null, // do not include api-session chats in the frontend for anyone.
           include: true,
         },
         ...(limit !== null ? { take: limit } : {}),
@@ -194,7 +225,7 @@ const WorkspaceChats = {
         const user = res.user_id ? await User.get({ id: res.user_id }) : null;
         res.user = user
           ? { username: user.username }
-          : { username: "unknown user" };
+          : { username: res.api_session_id !== null ? "API" : "unknown user" };
       }
 
       return results;
@@ -218,6 +249,41 @@ const WorkspaceChats = {
       return;
     } catch (error) {
       console.error(error.message);
+    }
+  },
+
+  // Explicit update of settings + key validations.
+  // Only use this method when directly setting a key value
+  // that takes no user input for the keys being modified.
+  _update: async function (id = null, data = {}) {
+    if (!id) throw new Error("No workspace chat id provided for update");
+
+    try {
+      await prisma.workspace_chats.update({
+        where: { id },
+        data,
+      });
+      return true;
+    } catch (error) {
+      console.error(error.message);
+      return false;
+    }
+  },
+  bulkCreate: async function (chatsData) {
+    // TODO: Replace with createMany when we update prisma to latest version
+    // The version of prisma that we are currently using does not support createMany with SQLite
+    try {
+      const createdChats = [];
+      for (const chatData of chatsData) {
+        const chat = await prisma.workspace_chats.create({
+          data: chatData,
+        });
+        createdChats.push(chat);
+      }
+      return { chats: createdChats, message: null };
+    } catch (error) {
+      console.error(error.message);
+      return { chats: null, message: error.message };
     }
   },
 };

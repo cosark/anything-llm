@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { useTranslation } from "react-i18next";
 
 export default function EditingChatBubble({
   message,
@@ -11,11 +12,14 @@ export default function EditingChatBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [tempMessage, setTempMessage] = useState(message[type]);
   const isUser = type === "user";
+  const { t } = useTranslation();
 
   return (
     <div>
-      <p className={`text-xs text-[#D3D4D4] ${isUser ? "text-right" : ""}`}>
-        {isUser ? "User" : "AnythingLLM Chat Assistant"}
+      <p
+        className={`text-xs text-white light:text-black/80 ${isUser ? "text-right" : ""}`}
+      >
+        {isUser ? t("common.user") : t("appearance.message.assistant")}
       </p>
       <div
         className={`relative flex w-full mt-2 items-start ${
@@ -23,7 +27,7 @@ export default function EditingChatBubble({
         }`}
       >
         <button
-          className={`transition-all duration-300 absolute z-10 text-white rounded-full hover:bg-neutral-700 hover:border-white border-transparent border shadow-lg ${
+          className={`transition-all duration-300 absolute z-10 text-white rounded-full hover:bg-neutral-700 light:hover:invert hover:border-white border-transparent border shadow-lg ${
             isUser ? "right-0 mr-2" : "ml-2"
           }`}
           style={{ top: "6px", [isUser ? "right" : "left"]: "290px" }}
@@ -47,13 +51,13 @@ export default function EditingChatBubble({
                 setIsEditing(false);
               }}
               autoFocus
-              className={`w-full ${
+              className={`w-full light:text-white ${
                 isUser ? "bg-[#41444C] text-white" : "bg-[#2E3036] text-white"
               }`}
             />
           ) : (
             tempMessage && (
-              <p className=" font-[500] md:font-semibold text-sm md:text-base break-words">
+              <p className=" font-[500] md:font-semibold text-sm md:text-base break-words light:invert">
                 {tempMessage}
               </p>
             )

@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from "react";
 import System from "../../../models/system";
 import { AUTH_TOKEN } from "../../../utils/constants";
-import useLogo from "../../../hooks/useLogo";
 import paths from "../../../utils/paths";
 import ModalWrapper from "@/components/ModalWrapper";
 import { useModal } from "@/hooks/useModal";
 import RecoveryCodeModal from "@/components/Modals/DisplayRecoveryCodeModal";
+import { useTranslation } from "react-i18next";
 
 export default function SingleUserAuth() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const { logo: _initLogo } = useLogo();
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [downloadComplete, setDownloadComplete] = useState(false);
   const [token, setToken] = useState(null);
+  const [customAppName, setCustomAppName] = useState(null);
 
   const {
     isOpen: isRecoveryCodeModalOpen,
@@ -57,22 +58,32 @@ export default function SingleUserAuth() {
     }
   }, [downloadComplete, token]);
 
+  useEffect(() => {
+    const fetchCustomAppName = async () => {
+      const { appName } = await System.fetchCustomAppName();
+      setCustomAppName(appName || "");
+      setLoading(false);
+    };
+    fetchCustomAppName();
+  }, []);
+
   return (
     <>
       <form onSubmit={handleLogin}>
-        <div className="flex flex-col justify-center items-center relative rounded-2xl md:bg-login-gradient md:shadow-[0_4px_14px_rgba(0,0,0,0.25)] md:px-12 py-12 -mt-36 md:-mt-10">
+        <div className="flex flex-col justify-center items-center relative rounded-2xl bg-theme-bg-secondary md:shadow-[0_4px_14px_rgba(0,0,0,0.25)] md:px-12 py-12 -mt-36 md:-mt-10">
           <div className="flex items-start justify-between pt-11 pb-9 rounded-t">
             <div className="flex items-center flex-col gap-y-4">
               <div className="flex gap-x-1">
                 <h3 className="text-md md:text-2xl font-bold text-white text-center white-space-nowrap hidden md:block">
-                  Welcome to
+                  {t("login.multi-user.welcome")}
                 </h3>
-                <p className="text-4xl md:text-2xl font-bold bg-gradient-to-r from-[#75D6FF] via-[#FFFFFF] to-[#FFFFFF] bg-clip-text text-transparent">
-                  AnythingLLM
+                <p className="text-4xl md:text-2xl font-bold bg-gradient-to-r from-[#75D6FF] via-[#FFFFFF] light:via-[#75D6FF] to-[#FFFFFF] light:to-[#75D6FF] bg-clip-text text-transparent">
+                  {customAppName || "AnythingLLM"}
                 </p>
               </div>
-              <p className="text-sm text-white/90 text-center">
-                Sign in to your AnythingLLM instance.
+              <p className="text-sm text-theme-text-secondary text-center">
+                {t("login.sign-in.start")} {customAppName || "AnythingLLM"}{" "}
+                {t("login.sign-in.end")}
               </p>
             </div>
           </div>
@@ -83,12 +94,11 @@ export default function SingleUserAuth() {
                   name="password"
                   type="password"
                   placeholder="Password"
-                  className="bg-zinc-900 text-white placeholder-white/20 text-sm rounded-md p-2.5 w-full h-[48px] md:w-[300px] md:h-[34px]"
+                  className="border-none bg-theme-settings-input-bg text-theme-text-primary placeholder:text-theme-settings-input-placeholder focus:outline-primary-button active:outline-primary-button outline-none text-sm rounded-md p-2.5 w-full h-[48px] md:w-[300px] md:h-[34px]"
                   required={true}
                   autoComplete="off"
                 />
               </div>
-
               {error && <p className="text-red-400 text-sm">Error: {error}</p>}
             </div>
           </div>
@@ -96,15 +106,17 @@ export default function SingleUserAuth() {
             <button
               disabled={loading}
               type="submit"
-              className="md:text-[#46C8FF] md:bg-transparent text-[#222628] text-sm font-bold focus:ring-4 focus:outline-none rounded-md border-[1.5px] border-[#46C8FF] md:h-[34px] h-[48px] md:hover:text-white md:hover:bg-[#46C8FF] bg-[#46C8FF] focus:z-10 w-full"
+              className="md:text-primary-button md:bg-transparent text-dark-text text-sm font-bold focus:ring-4 focus:outline-none rounded-md border-[1.5px] border-primary-button md:h-[34px] h-[48px] md:hover:text-white md:hover:bg-primary-button bg-primary-button focus:z-10 w-full"
             >
-              {loading ? "Validating..." : "Login"}
+              {loading
+                ? t("login.multi-user.validating")
+                : t("login.multi-user.login")}
             </button>
           </div>
         </div>
       </form>
 
-      <ModalWrapper isOpen={isRecoveryCodeModalOpen}>
+      <ModalWrapper isOpen={isRecoveryCodeModalOpen} noPortal={true}>
         <RecoveryCodeModal
           recoveryCodes={recoveryCodes}
           onDownloadComplete={handleDownloadComplete}
